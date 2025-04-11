@@ -12,7 +12,6 @@ class HistorialScreen extends StatefulWidget {
 
 class _HistorialScreenState extends State<HistorialScreen> {
   late Future<List<dynamic>> _historialFuture;
-  final TabletasApi _tabletasApi = TabletasApi();
 
   // Paleta de colores CFE
   static const Color cfeGreen = Color(0xFF009156);
@@ -27,7 +26,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
 
   void _loadData() {
     setState(() {
-      _historialFuture = _tabletasApi.obtenerHistorialAsignaciones(
+      _historialFuture = TabletasApi.obtenerHistorialAsignaciones(
         widget.rpeRegistrador,
       );
     });

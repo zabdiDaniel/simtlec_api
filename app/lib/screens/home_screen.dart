@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart'; // Añadir geolocator
 import 'login_screen.dart';
 import '../api/auth_api.dart';
 import 'tablet_registration_screen.dart';
 import 'profile_screen.dart';
-import 'historial_screen.dart'; // Asegúrate que esta importación esté presente
+import 'historial_screen.dart';
 import 'help_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -12,18 +13,48 @@ class HomeScreen extends StatelessWidget {
 
   const HomeScreen({Key? key, required this.userData}) : super(key: key);
 
-  // Paleta de colores CFE
   static const Color cfeGreen = Color(0xFF009156);
   static const Color cfeDarkGreen = Color(0xFF006341);
   static const Color backgroundColor = Color(0xFFF5F5F5);
 
+  // Método para verificar si los servicios de ubicación están habilitados
+  Future<bool> _checkLocationService() async {
+    return await Geolocator.isLocationServiceEnabled();
+  }
+
+  // Método para mostrar un SnackBar
+  void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        backgroundColor: isError ? Colors.red : cfeGreen,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // Método para manejar la navegación a TabletRegistrationScreen
+  void _navigateToTabletRegistration(BuildContext context) async {
+    bool locationEnabled = await _checkLocationService();
+    if (locationEnabled) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TabletRegistrationScreen(userData: userData),
+        ),
+      );
+    } else {
+      _showSnackBar(context, 'Por favor, activa los servicios de ubicación para registrar tabletas', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Bloquear rotación de pantalla en modo retrato
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
     return WillPopScope(
-      // Deshabilitar el botón de retroceso
       onWillPop: () async => false,
       child: Theme(
         data: ThemeData(
@@ -52,7 +83,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Construir AppBar
   AppBar _buildAppBar(BuildContext context) {
     return AppBar(
       title: const Text(
@@ -67,12 +97,7 @@ class HomeScreen extends StatelessWidget {
         IconButton(
           icon: const Icon(Icons.tablet_android, color: Colors.white),
           tooltip: 'Administrar tabletas',
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TabletRegistrationScreen(userData: userData),
-            ),
-          ),
+          onPressed: () => _navigateToTabletRegistration(context), // Usar el método nuevo
         ),
         IconButton(
           icon: const Icon(Icons.logout, color: Colors.white),
@@ -83,7 +108,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Construir tarjeta de bienvenida
   Widget _buildWelcomeCard(BuildContext context) {
     return Card(
       elevation: 0,
@@ -176,7 +200,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Construir botón principal
   Widget _buildMainButton(BuildContext context) {
     return ElevatedButton.icon(
       icon: const Icon(Icons.tablet_android, size: 24, color: Colors.white),
@@ -188,12 +211,7 @@ class HomeScreen extends StatelessWidget {
           color: Colors.white,
         ),
       ),
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => TabletRegistrationScreen(userData: userData),
-        ),
-      ),
+      onPressed: () => _navigateToTabletRegistration(context), // Usar el método nuevo
       style: ElevatedButton.styleFrom(
         backgroundColor: cfeGreen,
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -203,7 +221,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Construir título de acciones rápidas
   Widget _buildQuickActionsTitle() {
     return const Text(
       'Acciones Rápidas',
@@ -215,12 +232,11 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Construir grid de acciones rápidas
   Widget _buildQuickActionsGrid(BuildContext context) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 3, // Tres columnas para los tres botones
+      crossAxisCount: 3,
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
       childAspectRatio: 0.85,
@@ -260,7 +276,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Construir botón de acción rápida
   Widget _buildActionButton(
     BuildContext context,
     IconData icon,
@@ -295,7 +310,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Mostrar diálogo de confirmación de cierre de sesión
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
       context: context,

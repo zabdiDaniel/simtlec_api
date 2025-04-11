@@ -17,32 +17,30 @@ class FotosApi {
         Uri.parse('$baseUrl/subir_fotos.php'),
       );
 
-      // Agregar campos
       request.fields['tableta_id'] = tabletaId;
       request.fields['foto_index'] = fotoIndex.toString();
 
-      // Agregar archivo
       request.files.add(await http.MultipartFile.fromPath(
         'foto',
         foto.path,
         contentType: MediaType('image', 'jpeg'),
       ));
 
-      // Agregar headers
       request.headers['Authorization'] = 'Bearer $token';
 
       var response = await request.send();
       var responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 201) {
+        print('Foto subida con éxito: $responseBody');
         return true;
       } else {
         print('Error al subir foto: ${response.statusCode} - $responseBody');
-        return false;
+        throw Exception('Error al subir foto: ${response.statusCode} - $responseBody');
       }
     } catch (e) {
       print('Excepción al subir foto: $e');
-      return false;
+      throw Exception('Error de conexión: $e');
     }
   }
 }
