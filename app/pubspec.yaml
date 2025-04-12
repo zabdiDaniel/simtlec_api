@@ -32,11 +32,13 @@ dependencies:
     sdk: flutter
   http: ^1.2.1
   provider: ^6.0.5
-  image_picker: ^0.8.7
+  image_picker: ^1.0.8
   shared_preferences: ^2.2.0
   cached_network_image: ^3.2.3  # Para manejar mejor las imágenes
   geolocator: ^12.0.0
-  
+  camera: ^0.10.0+4  # Versión reciente, controla la cámara directamente
+  path_provider: ^2.0.11  # Para guardar fotos temporalmente
+  signature: ^5.4.0
 
 
   

@@ -32,6 +32,7 @@ class TabletasApi {
     required String rpeTrabajador,
     required String tipoAsignacion,
     required String asignadaPor,
+    String? firmaRuta,
   }) async {
     try {
       final request = http.MultipartRequest('POST', Uri.parse('${_baseUrl}registrar_historial.php'));
@@ -40,6 +41,7 @@ class TabletasApi {
         'rpe_trabajador': rpeTrabajador,
         'tipo_asignacion': tipoAsignacion,
         'asignada_por': asignadaPor,
+        if (firmaRuta != null) 'firma_ruta': firmaRuta,
       });
 
       final response = await request.send();
@@ -91,7 +93,6 @@ class TabletasApi {
     required String tabletaId,
     required File foto,
     required int fotoIndex,
-    required String token,
   }) async {
     try {
       var request = http.MultipartRequest(
@@ -108,7 +109,6 @@ class TabletasApi {
           contentType: MediaType('image', 'jpeg'),
         ),
       );
-      request.headers['Authorization'] = 'Bearer $token';
 
       var response = await request.send();
       var responseBody = await response.stream.bytesToString();
@@ -119,6 +119,42 @@ class TabletasApi {
         return true;
       } else {
         throw Exception('Error al subir foto: ${response.statusCode} - $responseBody');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: ${e.toString()}');
+    }
+  }
+
+  static Future<bool> subirFirma({
+    required String tabletaId,
+    required String rpeTrabajador,
+    required File firma,
+  }) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${_baseUrl}subir_firma.php'),
+      );
+
+      request.fields['tableta_id'] = tabletaId;
+      request.fields['rpe_trabajador'] = rpeTrabajador;
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'firma',
+          firma.path,
+          contentType: MediaType('image', 'png'),
+        ),
+      );
+
+      var response = await request.send();
+      var responseBody = await response.stream.bytesToString();
+
+      print('Respuesta de subirFirma: Status ${response.statusCode}, Body: $responseBody');
+
+      if (response.statusCode == 201) {
+        return true;
+      } else {
+        throw Exception('Error al subir firma: ${response.statusCode} - $responseBody');
       }
     } catch (e) {
       throw Exception('Error de conexión: ${e.toString()}');

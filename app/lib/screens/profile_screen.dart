@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../api/auth_api.dart';
+import '../constants.dart';
+import 'profile_content.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -15,12 +17,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Map<String, dynamic>> _userDataFuture;
   final AuthApi _authApi = AuthApi();
 
-  // Paleta de colores
-  static const Color cfeGreen = Color(0xFF009156);
-  static const Color cfeDarkGreen = Color(0xFF006341);
-  static const Color backgroundColor = Color(0xFFF5F5F5);
-  static const Color logoutRed = Color(0xFFE53935);
-
   @override
   void initState() {
     super.initState();
@@ -33,16 +29,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
+  void _logout() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         title: const Text(
-          'Mi Perfil',
+          AppStrings.profileTitle,
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
-        backgroundColor: cfeDarkGreen,
+        backgroundColor: AppColors.cfeDarkGreen,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -65,7 +69,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return _buildEmptyWidget();
           }
 
-          return _buildProfileContent(snapshot.data!);
+          return ProfileContent(
+            userData: snapshot.data!,
+            onRetry: _loadUserData,
+            onLogout: _logout,
+          );
         },
       ),
     );
@@ -76,12 +84,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 50, color: Colors.red),
+          const Icon(Icons.error_outline, size: 50, color: AppColors.errorColor),
           const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
-              'Error al cargar perfil:\n$error',
+              AppStrings.errorLoadingProfile.replaceFirst('%s', error),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16),
             ),
@@ -89,7 +97,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: _loadUserData,
-            child: const Text('Reintentar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.cfeGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(AppStrings.retryButton),
           ),
         ],
       ),
@@ -104,201 +116,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Icon(Icons.person_off, size: 50, color: Colors.grey),
           const SizedBox(height: 20),
           const Text(
-            'No se encontraron datos del usuario',
+            AppStrings.noUserData,
             style: TextStyle(fontSize: 16),
           ),
           TextButton(
             onPressed: _loadUserData,
-            child: const Text('Intentar nuevamente'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.cfeGreen),
+            child: const Text(AppStrings.tryAgainButton),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildProfileContent(Map<String, dynamic> userData) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _buildProfileHeader(userData),
-          const SizedBox(height: 20),
-          _buildUserInfoSection(userData),
-          const SizedBox(height: 40),
-          _buildLogoutButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileHeader(Map<String, dynamic> userData) {
-    return FutureBuilder<String>(
-      future: _authApi.obtenerFotoPerfil(userData['rpe']),
-      builder: (context, snapshot) {
-        // Mientras carga, mostrar placeholder
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildProfilePlaceholder(userData);
-        }
-
-        final nombreFoto = snapshot.data ?? 'default.jpg';
-        final urlFoto =
-            'https://sistemascfe.com/cfe-api/uploads/perfiles/$nombreFoto';
-
-        // Precargar la imagen en caché
-        precacheImage(NetworkImage(urlFoto), context);
-
-        return Center(
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundImage: NetworkImage(urlFoto),
-                onBackgroundImageError: (_, __) => null,
-                child: null,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                userData['nombre'],
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'RPE: ${userData['rpe']}',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Widget para el estado de carga
-  Widget _buildProfilePlaceholder(Map<String, dynamic> userData) {
-    return Center(
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.grey[300], // Fondo gris claro
-            child: null,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            userData['nombre'],
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'RPE: ${userData['rpe']}',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUserInfoSection(Map<String, dynamic> userData) {
-    final items = [
-      {'title': 'Correo electrónico', 'value': userData['correo']},
-      {'title': 'Tipo de usuario', 'value': userData['tipo_usuario']},
-      {'title': 'Fecha de registro', 'value': userData['fecha_registro']},
-    ];
-
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: List.generate(items.length, (index) {
-            final item = items[index];
-            return Column(
-              children: [
-                if (index > 0) const Divider(height: 20),
-                _buildInfoItem(
-                  item['title']!,
-                  item['value']?.toString() ?? 'No especificado',
-                ),
-              ],
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoItem(String title, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLogoutButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: logoutRed,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        onPressed: _showLogoutConfirmation,
-        child: const Text(
-          'Cerrar sesión',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutConfirmation() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            title: const Text('Cerrar Sesión'),
-            content: const Text(
-              '¿Estás seguro de que deseas salir de la aplicación?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Cancelar',
-                  style: TextStyle(color: cfeGreen),
-                ),
-              ),
-              TextButton(
-                onPressed:
-                    () => Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (context) => LoginScreen()),
-                      (route) => false,
-                    ),
-                child: const Text('Salir', style: TextStyle(color: logoutRed)),
-              ),
-            ],
-          ),
     );
   }
 }
