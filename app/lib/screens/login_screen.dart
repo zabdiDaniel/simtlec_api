@@ -201,15 +201,11 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
+                          
                         ],
                       ),
                       child: Image.asset(
-                        'assets/images/logo.png',
+                        'assets/images/logo_trans.png',
                         height: 120,
                         fit: BoxFit.contain,
                       ),

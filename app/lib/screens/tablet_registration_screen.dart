@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../api/trabajadores_api.dart';
-import '../api/tabletas_api.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:signature/signature.dart';
+import 'package:latlong2/latlong.dart';
+import '../api/trabajadores_api.dart';
+import '../api/tabletas_api.dart';
 import '../constants.dart';
 import 'tablet_registration_content.dart';
 
@@ -36,7 +37,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
   String? _selectedProceso;
   Map<String, dynamic>? _trabajadorAsignado;
   bool _isLoading = false;
-  bool _isSignatureConfirmed = false; // Nuevo estado para firma confirmada
+  bool _isSignatureConfirmed = false;
   final List<File?> _fotos = List.filled(4, null);
   String? _selectedCategoriaFalla;
   final Map<String, Map<String, bool>> _fallasPorCategoria = {
@@ -66,8 +67,16 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
       'Tableta reinicia sola': false,
     },
   };
+  LatLng? _currentLocation;
+  bool _isLocationLoading = true; // Nuevo estado para manejar carga inicial
 
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation(); // Obtener ubicación al iniciar
+  }
 
   @override
   void dispose() {
@@ -80,10 +89,80 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
     super.dispose();
   }
 
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isLocationLoading = true); // Indicar que está cargando
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showSnackBar(AppStrings.locationError, isError: true);
+        setState(() {
+          _currentLocation = null;
+          _isLocationLoading = false;
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showSnackBar(AppStrings.permissionDeniedError, isError: true);
+          setState(() {
+            _currentLocation = null;
+            _isLocationLoading = false;
+          });
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _showSnackBar(AppStrings.permissionDeniedForeverError, isError: true);
+        setState(() {
+          _currentLocation = null;
+          _isLocationLoading = false;
+        });
+        return;
+      }
+
+      // Intentar obtener la última ubicación conocida para mostrar algo rápido
+      Position? lastPosition = await Geolocator.getLastKnownPosition();
+      if (lastPosition != null && mounted) {
+        setState(() {
+          _currentLocation = LatLng(lastPosition.latitude, lastPosition.longitude);
+          _isLocationLoading = false;
+        });
+      }
+
+      // Obtener ubicación precisa en segundo plano
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5), // Reducido para mayor rapidez
+      );
+      if (mounted) {
+        setState(() {
+          _currentLocation = LatLng(position.latitude, position.longitude);
+          _isLocationLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(AppStrings.locationFetchError, isError: true);
+        setState(() {
+          _currentLocation = null;
+          _isLocationLoading = false;
+        });
+      }
+    }
+  }
+
+  void _retryLocation() {
+    setState(() => _isLoading = true);
+    _getCurrentLocation().then((_) {
+      if (mounted) setState(() => _isLoading = false);
+    });
+  }
+
   Future<void> _tomarFoto(int index) async {
     setState(() => _isLoading = true);
-    final start = DateTime.now();
-    print('Inicio captura: $start');
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
@@ -92,15 +171,8 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         maxHeight: 800,
         preferredCameraDevice: CameraDevice.rear,
       );
-      final afterPick = DateTime.now();
-      print(
-        'Foto capturada: $afterPick, tiempo: ${afterPick.difference(start).inMilliseconds}ms',
-      );
       if (image != null && mounted) {
         setState(() => _fotos[index] = File(image.path));
-        print(
-          'UI actualizada: ${DateTime.now()}, total: ${DateTime.now().difference(start).inMilliseconds}ms',
-        );
       }
     } catch (e) {
       _showSnackBar(AppStrings.errorTakingPhoto, isError: true);
@@ -109,41 +181,10 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
     }
   }
 
-  Future<String?> _getCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showSnackBar(AppStrings.locationError, isError: true);
-        return null;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showSnackBar(AppStrings.permissionDeniedError, isError: true);
-          return null;
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _showSnackBar(AppStrings.permissionDeniedForeverError, isError: true);
-        return null;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      return '${position.latitude}, ${position.longitude}';
-    } catch (e) {
-      _showSnackBar(AppStrings.locationFetchError, isError: true);
-      return null;
-    }
-  }
-
   Future<File?> _saveSignature() async {
     if (_signatureController.isNotEmpty) {
       final signatureData = await _signatureController.toPngBytes(
-        width: 600, // Mejorar resolución
+        width: 600,
         height: 300,
       );
       if (signatureData != null) {
@@ -191,12 +232,6 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
 
     setState(() => _isLoading = true);
     try {
-      String? ubicacionRegistro = await _getCurrentLocation();
-      if (ubicacionRegistro == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
       final datosTableta = {
         'activo': _activoController.text,
         'inventario': _inventarioController.text,
@@ -206,9 +241,12 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         'agencia': _selectedAgencia,
         'proceso': _selectedProceso,
         'rpe_trabajador': _trabajadorAsignado?['rpe'],
-        'ubicacion_registro': ubicacionRegistro,
         'marca_chip': AppStrings.fixedChipBrand,
-        'numero_serie_chip': _chipSerieController.text.isEmpty ? null : _chipSerieController.text,
+        'numero_serie_chip':
+            _chipSerieController.text.isEmpty ? null : _chipSerieController.text,
+        if (_currentLocation != null)
+          'ubicacion_registro':
+              '${_currentLocation!.latitude},${_currentLocation!.longitude}',
       };
 
       final registroExitoso = await TabletasApi.registrarTableta(datosTableta);
@@ -218,7 +256,8 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         String? firmaRuta;
         final signatureFile = await _saveSignature();
         if (signatureFile != null) {
-          firmaRuta = 'firmas/${_activoController.text}_${_trabajadorAsignado!['rpe']}.png';
+          firmaRuta =
+              'firmas/${_activoController.text}_${_trabajadorAsignado!['rpe']}.png';
           final firmaSubida = await TabletasApi.subirFirma(
             tabletaId: _activoController.text,
             rpeTrabajador: _trabajadorAsignado!['rpe'],
@@ -247,7 +286,9 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         List<Map<String, String>> fallas = [];
         _fallasPorCategoria.forEach((categoria, fallasMap) {
           fallasMap.forEach((falla, seleccionada) {
-            if (seleccionada) fallas.add({'categoria': categoria, 'falla': falla});
+            if (seleccionada) {
+              fallas.add({'categoria': categoria, 'falla': falla});
+            }
           });
         });
 
@@ -313,10 +354,9 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
       _fotos.fillRange(0, 4, null);
       _selectedCategoriaFalla = null;
       _signatureController.clear();
-      _isSignatureConfirmed = false; // Resetear confirmación
-      _fallasPorCategoria.forEach(
-        (categoria, fallasMap) => fallasMap.updateAll((key, value) => false),
-      );
+      _isSignatureConfirmed = false;
+      _currentLocation = null;
+      _isLocationLoading = true;
     });
   }
 
@@ -345,7 +385,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
   void _clearSignature() {
     setState(() {
       _signatureController.clear();
-      _isSignatureConfirmed = false; // Reactivar panel
+      _isSignatureConfirmed = false;
     });
   }
 
@@ -397,20 +437,24 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
             selectedCategoriaFalla: _selectedCategoriaFalla,
             fallasPorCategoria: _fallasPorCategoria,
             signatureController: _signatureController,
-            isSignatureConfirmed: _isSignatureConfirmed, // Pasar estado
+            isSignatureConfirmed: _isSignatureConfirmed,
             onAndroidChanged: (val) => setState(() => _selectedAndroid = val),
             onAnioChanged: (val) => setState(() => _selectedAnio = val),
             onAgenciaChanged: (val) => setState(() => _selectedAgencia = val),
             onProcesoChanged: (val) => setState(() => _selectedProceso = val),
             onTakePhoto: _tomarFoto,
             onSearchWorker: _buscarTrabajador,
-            onCategoriaFallaChanged: (val) => setState(() => _selectedCategoriaFalla = val),
+            onCategoriaFallaChanged: (val) =>
+                setState(() => _selectedCategoriaFalla = val),
             onFallaChanged: (falla, value) => setState(
               () => _fallasPorCategoria[_selectedCategoriaFalla]![falla] = value,
             ),
             onRegister: _registrarTableta,
             onClearSignature: _clearSignature,
-            onConfirmSignature: _confirmSignature, // Nuevo callback
+            onConfirmSignature: _confirmSignature,
+            currentLocation: _currentLocation,
+            onRetryLocation: _retryLocation,
+            isLocationLoading: _isLocationLoading, // Pasar el estado de carga
           ),
           if (_isLoading)
             Container(

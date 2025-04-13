@@ -5,16 +5,16 @@ class AppColors {
   static const Color cfeGreen = Color(0xFF009156);
   static const Color cfeDarkGreen = Color(0xFF006341);
   static const Color backgroundColor = Color(0xFFF5F5F5);
-  static const Color errorColor = Color(
-    0xFFD32F2F,
-  ); // Actualizado de Colors.red
+  static const Color errorColor = Color(0xFFD32F2F);
   static const Color textSecondary = Color(0xFF757575);
   static const Color logoutRed = Color(0xFFE53935);
+  // Nuevo color para el mapa (opcional, para el fondo del contenedor)
+  static const Color mapBackground = Color(0xFFE8F5E9); // Verde claro CFE
 }
 
 // Textos
 class AppStrings {
-  static const String appName = 'SIMTLEC';
+  static const String appName = 'Bienvenido';
   static const String version = 'Ver. 1.0.0';
   static const String systemName = 'Sistema de Inventario de Tabletas CFE';
   static const String loginButton = 'Ingresar';
@@ -30,7 +30,7 @@ class AppStrings {
   static const String connectionTap = 'Presiona para probar conexión';
   static const String connectionError = '❌ Error: %s';
   static const String welcomeMessage = 'Bienvenido/a';
-  static const String manageTablets = 'Administrar Tabletas';
+  static const String manageTablets = 'Registrar Tabletas';
   static const String quickActions = 'Acciones Rápidas';
   static const String profileLabel = 'Perfil';
   static const String historyLabel = 'Historial';
@@ -134,10 +134,17 @@ class AppStrings {
   static const String clearSignatureButton = 'Limpiar';
   static const String signatureUploadError = 'Error al subir la firma';
   static const String confirmSignatureButton = 'Confirmar';
-  static const String signatureConfirmedButton = 'Confirmada'; // Nueva constante
+  static const String signatureConfirmedButton = 'Confirmada';
   static const String signatureConfirmed = 'Firma confirmada correctamente';
-  static const String signatureEmptyError = 'Por favor, dibuje una firma antes de confirmar';
-  static const String signatureNotConfirmedError = 'Por favor, confirme la firma antes de registrar';
+  static const String signatureEmptyError =
+      'Por favor, dibuje una firma antes de confirmar';
+  static const String signatureNotConfirmedError =
+      'Por favor, confirme la firma antes de registrar';
+  // Nuevas constantes para la sección de ubicación
+  static const String locationSection = 'Ubicación Actual';
+  static const String noLocationAvailable = 'No se pudo obtener la ubicación';
+  static const String coordinatesLabel = 'Coordenadas';
+  static const String retryLocationButton = 'Reintentar Ubicación';
   // Opciones estáticas
   static const List<String> androidOptions = ['8.1', '11'];
   static const List<String> anioOptions = [
