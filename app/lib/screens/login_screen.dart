@@ -33,9 +33,9 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive) {
-      SystemNavigator.pop();
-    }
+    // Log para depurar el ciclo de vida
+    debugPrint('AppLifecycleState: $state');
+    // Eliminamos SystemNavigator.pop() para evitar cierres al bajar la barra de notificaciones
   }
 
   Future<void> _testConnection() async {
@@ -198,11 +198,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Container(
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          
-                        ],
                       ),
                       child: Image.asset(
                         'assets/images/logo_trans.png',

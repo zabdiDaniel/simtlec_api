@@ -41,7 +41,7 @@ dependencies:
   camera: ^0.10.0+4  # Versión reciente, controla la cámara directamente
   path_provider: ^2.0.11  # Para guardar fotos temporalmente
   signature: ^5.4.0
-
+  connectivity_plus: ^5.0.2
 
   
 

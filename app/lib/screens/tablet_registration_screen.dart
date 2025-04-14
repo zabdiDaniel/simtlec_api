@@ -1,3 +1,4 @@
+// lib/screens/tablet_registration_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,10 +6,13 @@ import 'dart:io';
 import 'package:geolocator/geolocator.dart';
 import 'package:signature/signature.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
 import '../api/trabajadores_api.dart';
-import '../api/tabletas_api.dart';
 import '../constants.dart';
+import '../models/tablet_registration.dart';
+import '../services/sync_service.dart';
 import 'tablet_registration_content.dart';
+import 'dart:async';
 
 class TabletRegistrationScreen extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -68,18 +72,24 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
     },
   };
   LatLng? _currentLocation;
-  bool _isLocationLoading = true; // Nuevo estado para manejar carga inicial
-
+  bool _isLocationLoading = true;
   final ImagePicker _picker = ImagePicker();
+  final SyncService _syncService = SyncService();
+  Timer? _syncTimer;
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation(); // Obtener ubicación al iniciar
+    _getCurrentLocation();
+    _syncService.syncPendingRegistrations(context);
+    _syncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      _syncService.syncPendingRegistrations(context);
+    });
   }
 
   @override
   void dispose() {
+    _syncTimer?.cancel();
     _activoController.dispose();
     _inventarioController.dispose();
     _serieController.dispose();
@@ -90,7 +100,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    setState(() => _isLocationLoading = true); // Indicar que está cargando
+    setState(() => _isLocationLoading = true);
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -123,7 +133,6 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         return;
       }
 
-      // Intentar obtener la última ubicación conocida para mostrar algo rápido
       Position? lastPosition = await Geolocator.getLastKnownPosition();
       if (lastPosition != null && mounted) {
         setState(() {
@@ -132,10 +141,9 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         });
       }
 
-      // Obtener ubicación precisa en segundo plano
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 5), // Reducido para mayor rapidez
+        timeLimit: const Duration(seconds: 5),
       );
       if (mounted) {
         setState(() {
@@ -172,7 +180,12 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         preferredCameraDevice: CameraDevice.rear,
       );
       if (image != null && mounted) {
-        setState(() => _fotos[index] = File(image.path));
+        // Guardar foto en directorio persistente
+        final directory = await getApplicationDocumentsDirectory();
+        final photoPath =
+            '${directory.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await File(image.path).copy(photoPath);
+        setState(() => _fotos[index] = File(photoPath));
       }
     } catch (e) {
       _showSnackBar(AppStrings.errorTakingPhoto, isError: true);
@@ -188,8 +201,9 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         height: 300,
       );
       if (signatureData != null) {
-        final tempDir = await Directory.systemTemp.createTemp();
-        final signatureFile = File('${tempDir.path}/signature.png');
+        final directory = await getApplicationDocumentsDirectory();
+        final signatureFile =
+            File('${directory.path}/signature_${DateTime.now().millisecondsSinceEpoch}.png');
         await signatureFile.writeAsBytes(signatureData);
         return signatureFile;
       }
@@ -232,98 +246,68 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final datosTableta = {
-        'activo': _activoController.text,
-        'inventario': _inventarioController.text,
-        'numero_serie': _serieController.text,
-        'version_android': _selectedAndroid,
-        'anio_adquisicion': _selectedAnio,
-        'agencia': _selectedAgencia,
-        'proceso': _selectedProceso,
-        'rpe_trabajador': _trabajadorAsignado?['rpe'],
-        'marca_chip': AppStrings.fixedChipBrand,
-        'numero_serie_chip':
-            _chipSerieController.text.isEmpty ? null : _chipSerieController.text,
-        if (_currentLocation != null)
-          'ubicacion_registro':
-              '${_currentLocation!.latitude},${_currentLocation!.longitude}',
-      };
-
-      final registroExitoso = await TabletasApi.registrarTableta(datosTableta);
-      if (!registroExitoso) throw Exception('Error al registrar tableta');
-
+      // Preparar datos
+      List<String> fotoPaths = _fotos
+          .where((foto) => foto != null)
+          .map((foto) => foto!.path)
+          .toList();
+      String? firmaPath;
       if (_trabajadorAsignado != null) {
-        String? firmaRuta;
         final signatureFile = await _saveSignature();
         if (signatureFile != null) {
-          firmaRuta =
-              'firmas/${_activoController.text}_${_trabajadorAsignado!['rpe']}.png';
-          final firmaSubida = await TabletasApi.subirFirma(
-            tabletaId: _activoController.text,
-            rpeTrabajador: _trabajadorAsignado!['rpe'],
-            firma: signatureFile,
-          );
-          if (!firmaSubida) {
-            _showSnackBar(AppStrings.signatureUploadError, isError: true);
-          }
+          firmaPath = signatureFile.path;
         }
+      }
 
-        final historialData = {
-          'activo': _activoController.text,
-          'rpe_trabajador': _trabajadorAsignado!['rpe'],
-          'tipo_asignacion': 'Asignación inicial',
-          'asignada_por': widget.userData?['rpe'] ?? 'UNKNOWN',
-          'firma_ruta': firmaRuta,
-        };
-        final historialId = await TabletasApi.registrarHistorial(
-          activo: historialData['activo']!,
-          rpeTrabajador: historialData['rpe_trabajador']!,
-          tipoAsignacion: historialData['tipo_asignacion']!,
-          asignadaPor: historialData['asignada_por']!,
-          firmaRuta: historialData['firma_ruta'],
-        );
-
-        List<Map<String, String>> fallas = [];
-        _fallasPorCategoria.forEach((categoria, fallasMap) {
-          fallasMap.forEach((falla, seleccionada) {
-            if (seleccionada) {
-              fallas.add({'categoria': categoria, 'falla': falla});
-            }
-          });
+      List<Map<String, String>> fallas = [];
+      _fallasPorCategoria.forEach((categoria, fallasMap) {
+        fallasMap.forEach((falla, seleccionada) {
+          if (seleccionada) {
+            fallas.add({'categoria': categoria, 'falla': falla});
+          }
         });
+      });
 
-        if (fallas.isNotEmpty) {
-          for (var falla in fallas) {
-            await TabletasApi.registrarFallaHistorial(
-              historialId: historialId,
-              categoria: falla['categoria']!,
-              falla: falla['falla']!,
-            );
-          }
-        }
-      }
+      final registration = TabletRegistration(
+        activo: _activoController.text,
+        inventario: _inventarioController.text,
+        numeroSerie: _serieController.text,
+        versionAndroid: _selectedAndroid,
+        anioAdquisicion: _selectedAnio,
+        agencia: _selectedAgencia,
+        proceso: _selectedProceso,
+        rpeTrabajador: _trabajadorAsignado?['rpe'],
+        marcaChip: AppStrings.fixedChipBrand,
+        numeroSerieChip: _chipSerieController.text.isEmpty
+            ? null
+            : _chipSerieController.text,
+        ubicacionRegistro: _currentLocation != null
+            ? '${_currentLocation!.latitude},${_currentLocation!.longitude}'
+            : null,
+        fotoPaths: fotoPaths,
+        firmaPath: firmaPath,
+        fallas: fallas,
+        asignadaPor: widget.userData?['rpe'] ?? 'UNKNOWN',
+        timestamp: DateTime.now(),
+      );
 
-      bool todasSubidas = true;
-      for (int i = 0; i < _fotos.length; i++) {
-        if (_fotos[i] != null) {
-          try {
-            final fotoSubida = await TabletasApi.subirFoto(
-              tabletaId: _activoController.text,
-              foto: File(_fotos[i]!.path),
-              fotoIndex: i + 1,
-            );
-            if (!fotoSubida) todasSubidas = false;
-          } catch (e) {
-            todasSubidas = false;
-          }
-        }
-      }
+      // Guardar localmente
+      await _syncService.saveRegistrationLocally(registration);
+      _showSnackBar('Registro guardado localmente');
 
-      if (todasSubidas) {
+      // Intentar sincronizar
+      await _syncService.syncPendingRegistrations(context);
+
+      // Verificar si se sincronizó
+      final pendingCount = await _syncService.getPendingCount();
+      if (pendingCount == 0) {
         _showSnackBar(AppStrings.registrationSuccess);
         _resetForm();
       } else {
-        _showSnackBar(AppStrings.registrationPartialSuccess, isError: true);
+        _showSnackBar(
+          'Registro guardado, pero pendiente de sincronización debido a la red',
+          isError: true,
+        );
       }
     } catch (e) {
       _showSnackBar(
@@ -418,6 +402,30 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          FutureBuilder<int>(
+            future: _syncService.getPendingCount(),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data! > 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Chip(
+                    label: Text(
+                      '${snapshot.data} pendiente${snapshot.data! > 1 ? 's' : ''}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    backgroundColor: AppColors.errorColor,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+        },
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -454,7 +462,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
             onConfirmSignature: _confirmSignature,
             currentLocation: _currentLocation,
             onRetryLocation: _retryLocation,
-            isLocationLoading: _isLocationLoading, // Pasar el estado de carga
+            isLocationLoading: _isLocationLoading,
           ),
           if (_isLoading)
             Container(
