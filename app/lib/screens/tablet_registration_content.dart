@@ -1,3 +1,4 @@
+// lib/screens/tablet_registration_content.dart
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
@@ -18,6 +19,7 @@ class TabletRegistrationContent extends StatelessWidget {
   final String? selectedAnio;
   final String? selectedAgencia;
   final String? selectedProceso;
+  final String? selectedCentroCosto; // Nuevo parámetro
   final Map<String, dynamic>? trabajadorAsignado;
   final List<File?> fotos;
   final String? selectedCategoriaFalla;
@@ -28,6 +30,7 @@ class TabletRegistrationContent extends StatelessWidget {
   final Function(String?) onAnioChanged;
   final Function(String?) onAgenciaChanged;
   final Function(String?) onProcesoChanged;
+  final Function(String?) onCentroCostoChanged; // Nueva función
   final Function(int) onTakePhoto;
   final Function onSearchWorker;
   final Function(String?) onCategoriaFallaChanged;
@@ -37,7 +40,7 @@ class TabletRegistrationContent extends StatelessWidget {
   final Function onConfirmSignature;
   final LatLng? currentLocation;
   final VoidCallback onRetryLocation;
-  final bool isLocationLoading; // Nuevo parámetro para estado de carga
+  final bool isLocationLoading;
 
   const TabletRegistrationContent({
     Key? key,
@@ -51,6 +54,7 @@ class TabletRegistrationContent extends StatelessWidget {
     required this.selectedAnio,
     required this.selectedAgencia,
     required this.selectedProceso,
+    required this.selectedCentroCosto,
     required this.trabajadorAsignado,
     required this.fotos,
     required this.selectedCategoriaFalla,
@@ -61,6 +65,7 @@ class TabletRegistrationContent extends StatelessWidget {
     required this.onAnioChanged,
     required this.onAgenciaChanged,
     required this.onProcesoChanged,
+    required this.onCentroCostoChanged,
     required this.onTakePhoto,
     required this.onSearchWorker,
     required this.onCategoriaFallaChanged,
@@ -96,7 +101,10 @@ class TabletRegistrationContent extends StatelessWidget {
           const SizedBox(height: 20),
           _buildSection(AppStrings.locationSection, _buildLocationSection()),
           const SizedBox(height: 20),
-          _buildSection(AppStrings.observationsSection, _buildObservacionesField()),
+          _buildSection(
+            AppStrings.observationsSection,
+            _buildObservacionesField(),
+          ),
           const SizedBox(height: 30),
           _buildSubmitButton(),
         ],
@@ -208,6 +216,14 @@ class TabletRegistrationContent extends StatelessWidget {
           onProcesoChanged,
           required: true,
         ),
+        const SizedBox(height: 16),
+        _buildDropdown(
+          AppStrings.centroCostoLabel,
+          AppStrings.centroCostoOptions,
+          selectedCentroCosto,
+          onCentroCostoChanged,
+          required: true,
+        ),
       ],
     );
   }
@@ -280,15 +296,18 @@ class TabletRegistrationContent extends StatelessWidget {
           vertical: 12,
         ),
       ),
-      inputFormatters: label == AppStrings.assetNumberLabel
-          ? [LengthLimitingTextInputFormatter(8)]
-          : null,
-      autovalidateMode: label == AppStrings.assetNumberLabel
-          ? AutovalidateMode.onUserInteraction
-          : AutovalidateMode.disabled,
-      validator: label == AppStrings.assetNumberLabel
-          ? AppValidators.validateAssetNumber
-          : (required ? AppValidators.validateRequired : null),
+      inputFormatters:
+          label == AppStrings.assetNumberLabel
+              ? [LengthLimitingTextInputFormatter(8)]
+              : null,
+      autovalidateMode:
+          label == AppStrings.assetNumberLabel
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
+      validator:
+          label == AppStrings.assetNumberLabel
+              ? AppValidators.validateAssetNumber
+              : (required ? AppValidators.validateRequired : null),
     );
   }
 
@@ -322,22 +341,24 @@ class TabletRegistrationContent extends StatelessWidget {
           vertical: 12,
         ),
       ),
-      items: items
-          .map(
-            (item) => DropdownMenuItem(
-              value: item,
-              child: Text(
-                item,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          )
-          .toList(),
+      items:
+          items
+              .map(
+                (item) => DropdownMenuItem(
+                  value: item,
+                  child: Text(
+                    item,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              )
+              .toList(),
       onChanged: onChanged,
-      validator: required
-          ? (value) => value == null ? AppStrings.requiredFieldError : null
-          : null,
+      validator:
+          required
+              ? (value) => value == null ? AppStrings.requiredFieldError : null
+              : null,
       dropdownColor: Colors.white,
       borderRadius: BorderRadius.circular(12),
     );
@@ -354,38 +375,41 @@ class TabletRegistrationContent extends StatelessWidget {
         childAspectRatio: 1,
       ),
       itemCount: 4,
-      itemBuilder: (context, index) => GestureDetector(
-        onTap: () => onTakePhoto(index),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!, width: 1.5),
-            image: fotos[index] != null
-                ? DecorationImage(
-                    image: FileImage(fotos[index]!),
-                    fit: BoxFit.cover,
-                  )
-                : null,
+      itemBuilder:
+          (context, index) => GestureDetector(
+            onTap: () => onTakePhoto(index),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!, width: 1.5),
+                image:
+                    fotos[index] != null
+                        ? DecorationImage(
+                            image: FileImage(fotos[index]!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+              ),
+              child:
+                  fotos[index] == null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.camera_alt,
+                              color: Colors.grey[400],
+                              size: 32,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Foto ${index + 1}',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        )
+                      : null,
+            ),
           ),
-          child: fotos[index] == null
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.camera_alt,
-                      color: Colors.grey[400],
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Foto ${index + 1}',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                )
-              : null,
-        ),
-      ),
     );
   }
 
@@ -506,7 +530,8 @@ class TabletRegistrationContent extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             ElevatedButton(
-              onPressed: isSignatureConfirmed ? null : () => onConfirmSignature(),
+              onPressed:
+                  isSignatureConfirmed ? null : () => onConfirmSignature(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.cfeGreen,
                 foregroundColor: Colors.white,
@@ -553,200 +578,190 @@ class TabletRegistrationContent extends StatelessWidget {
   }
 
   Widget _buildLocationSection() {
-    return AnimatedOpacity(
-      opacity: isLocationLoading || currentLocation != null ? 1.0 : 0.9,
-      duration: const Duration(milliseconds: 300),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isLocationLoading) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.cfeGreen.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.cfeGreen.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(AppColors.cfeGreen),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Obteniendo ubicación...',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else if (currentLocation == null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.errorColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.errorColor.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning, color: AppColors.errorColor, size: 24),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      AppStrings.noLocationAvailable,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: onRetryLocation,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.cfeGreen,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.cfeGreen.withOpacity(0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.refresh, color: Colors.white, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      AppStrings.retryLocationButton,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            AnimatedSlide(
-              offset: currentLocation != null ? Offset.zero : const Offset(0, 0.1),
-              duration: const Duration(milliseconds: 300),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.cfeGreen.withOpacity(0.5)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.location_on, color: AppColors.cfeGreen, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Lat: ${currentLocation!.latitude.toStringAsFixed(4)}, '
-                      'Lon: ${currentLocation!.longitude.toStringAsFixed(4)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isLocationLoading) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.cfeGreen.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              child: AnimatedOpacity(
-                opacity: currentLocation != null ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 500),
-                child: Container(
-                  height: 180,
-                  decoration: BoxDecoration(
-                    color: AppColors.mapBackground,
-                    border: Border.all(color: AppColors.cfeGreen, width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: FlutterMap(
-                    options: MapOptions(
-                      initialCenter: currentLocation ?? const LatLng(0, 0),
-                      initialZoom: 14.0,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom,
-                      ),
-                      keepAlive: true,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        subdomains: const ['a', 'b', 'c'],
-                        tileProvider: CachedTileProvider(),
-                        maxZoom: 19,
-                        errorTileCallback: (tile, error, stackTrace) {
-                          print('Error loading tile: $error');
-                        },
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          if (currentLocation != null)
-                            Marker(
-                              point: currentLocation!,
-                              width: 40,
-                              height: 40,
-                              child: const Icon(
-                                Icons.location_pin,
-                                color: AppColors.cfeDarkGreen,
-                                size: 40,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
+              border: Border.all(color: AppColors.cfeGreen.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(AppColors.cfeGreen),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Obteniendo ubicación...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else if (currentLocation == null) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.errorColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.errorColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning, color: AppColors.errorColor, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    AppStrings.noLocationAvailable,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: onRetryLocation,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.cfeGreen,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.cfeGreen.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.refresh, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    AppStrings.retryLocationButton,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.cfeGreen.withOpacity(0.5)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.location_on, color: AppColors.cfeGreen, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Lat: ${currentLocation!.latitude.toStringAsFixed(4)}, '
+                  'Lon: ${currentLocation!.longitude.toStringAsFixed(4)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: AppColors.mapBackground,
+                border: Border.all(color: AppColors.cfeGreen, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: FlutterMap(
+                key: ValueKey(currentLocation?.toString()), // Forzar recarga
+                options: MapOptions(
+                  initialCenter: currentLocation ?? const LatLng(0, 0),
+                  initialZoom: 16,
+                  interactionOptions: const InteractionOptions(
+                    flags:
+                        InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom,
+                  ),
+                  keepAlive: true,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c'],
+                    tileProvider: CachedTileProvider(),
+                    maxZoom: 19,
+                    errorTileCallback: (tile, error, stackTrace) {
+                      print('Error loading tile: $error');
+                    },
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      if (currentLocation != null)
+                        Marker(
+                          point: currentLocation!,
+                          width: 40,
+                          height: 40,
+                          child: const Icon(
+                            Icons.location_pin,
+                            color: AppColors.cfeDarkGreen,
+                            size: 40,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -776,14 +791,15 @@ class TabletRegistrationContent extends StatelessWidget {
               vertical: 12,
             ),
           ),
-          items: fallasPorCategoria.keys
-              .map(
-                (categoria) => DropdownMenuItem(
-                  value: categoria,
-                  child: Text(categoria),
-                ),
-              )
-              .toList(),
+          items:
+              fallasPorCategoria.keys
+                  .map(
+                    (categoria) => DropdownMenuItem(
+                      value: categoria,
+                      child: Text(categoria),
+                    ),
+                  )
+                  .toList(),
           onChanged: onCategoriaFallaChanged,
           hint: const Text('Seleccione una categoría'),
         ),

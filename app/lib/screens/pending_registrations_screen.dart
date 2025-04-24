@@ -1,8 +1,6 @@
 // lib/screens/pending_registrations_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/tablet_registration.dart';
 import '../services/sync_service.dart';
 import '../constants.dart';
@@ -15,8 +13,7 @@ class PendingRegistrationsScreen extends StatefulWidget {
       _PendingRegistrationsScreenState();
 }
 
-class _PendingRegistrationsScreenState
-    extends State<PendingRegistrationsScreen> {
+class _PendingRegistrationsScreenState extends State<PendingRegistrationsScreen> {
   final SyncService _syncService = SyncService();
   List<TabletRegistration> _pendingRegistrations = [];
   bool _isLoading = false;
@@ -28,21 +25,46 @@ class _PendingRegistrationsScreenState
   }
 
   Future<void> _loadPendingRegistrations() async {
-    final prefs = await SharedPreferences.getInstance();
-    final pending = prefs.getStringList('pendingRegistrations') ?? [];
-    setState(() {
-      _pendingRegistrations =
-          pending
-              .map((json) => TabletRegistration.fromJson(jsonDecode(json)))
-              .toList();
-    });
+    setState(() => _isLoading = true);
+    final pending = await _syncService.getPendingRegistrations();
+    if (mounted) {
+      setState(() {
+        _pendingRegistrations = pending;
+        _isLoading = false;
+      });
+    }
   }
 
-  Future<void> _syncNow() async {
+  Future<void> _syncRegistrations() async {
     setState(() => _isLoading = true);
-    await _syncService.syncPendingRegistrations(context);
+    final results = await _syncService.syncPendingRegistrations(context);
+    if (!mounted) return;
+
+    int successes = results.where((r) => r.success).length;
+    int failures = results.where((r) => !r.success).length;
+
+    if (successes > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$successes registro${successes > 1 ? 's' : ''} enviado${successes > 1 ? 's' : ''} correctamente'),
+          backgroundColor: AppColors.cfeGreen,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+    if (failures > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$failures registro${failures > 1 ? 's' : ''} no pudo${failures > 1 ? 'ron' : ''} enviarse'),
+          backgroundColor: AppColors.errorColor,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+
     await _loadPendingRegistrations();
-    setState(() => _isLoading = false);
   }
 
   @override
@@ -61,185 +83,168 @@ class _PendingRegistrationsScreenState
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sync, color: Colors.white),
-            onPressed: _isLoading ? null : _syncNow,
-            tooltip: 'Sincronizar ahora',
-          ),
-        ],
       ),
       body: Stack(
         children: [
-          _pendingRegistrations.isEmpty
-              ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: AppColors.cfeGreen.withOpacity(0.5),
-                      size: 80,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No hay registros pendientes',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-              : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _pendingRegistrations.length,
-                itemBuilder: (context, index) {
-                  final registration = _pendingRegistrations[index];
-                  return AnimatedOpacity(
-                    opacity: _isLoading ? 0.5 : 1.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: Card(
-                      elevation: 2,
+          Column(
+            children: [
+              if (_pendingRegistrations.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _syncRegistrations,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.cfeGreen,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Tableta: ${registration.activo}',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.cfeDarkGreen,
-                                  ),
-                                ),
-                                Text(
-                                  '${registration.timestamp.day}/${registration.timestamp.month}/${registration.timestamp.year} '
-                                  '${registration.timestamp.hour}:${registration.timestamp.minute.toString().padLeft(2, '0')}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No. Serie: ${registration.numeroSerie}',
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      minimumSize: const Size(double.infinity, 0),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      _isLoading ? 'Enviando...' : 'Enviar Todos',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: _isLoading && _pendingRegistrations.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.cfeGreen,
+                        ),
+                      )
+                    : _pendingRegistrations.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No hay registros pendientes',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 18,
                                 color: AppColors.textSecondary,
                               ),
                             ),
-                            if (registration.rpeTrabajador != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'Asignada a RPE: ${registration.rpeTrabajador}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textSecondary,
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _pendingRegistrations.length,
+                            itemBuilder: (context, index) {
+                              final registration =
+                                  _pendingRegistrations[index];
+                              return Card(
+                                elevation: 2,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            if (registration.fotoPaths.isNotEmpty) ...[
-                              SizedBox(
-                                height: 80,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  children:
-                                      registration.fotoPaths.asMap().entries.map((
-                                        entry,
-                                      ) {
-                                        final photoPath = entry.value;
-                                        return Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 8,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Activo: ${registration.activo}',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.cfeDarkGreen,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Inventario: ${registration.inventario}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Serie: ${registration.numeroSerie}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Fotos: ${registration.fotoPaths.length}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      if (registration.firmaPath != null)
+                                        const Text(
+                                          'Firma: Incluida',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.textSecondary,
                                           ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            child:
-                                                File(photoPath).existsSync()
-                                                    ? Image.file(
-                                                      File(photoPath),
-                                                      width: 80,
-                                                      height: 80,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder:
-                                                          (
-                                                            context,
-                                                            error,
-                                                            stackTrace,
-                                                          ) => Container(
-                                                            width: 80,
-                                                            height: 80,
-                                                            color:
-                                                                Colors
-                                                                    .grey[300],
-                                                            child: const Icon(
-                                                              Icons
-                                                                  .broken_image,
-                                                              color:
-                                                                  Colors.grey,
-                                                            ),
-                                                          ),
-                                                    )
-                                                    : Container(
-                                                      width: 80,
-                                                      height: 80,
-                                                      color: Colors.grey[300],
-                                                      child: const Icon(
-                                                        Icons.broken_image,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    ),
+                                        ),
+                                      Text(
+                                        'Fecha: ${registration.timestamp.toLocal().toString().split('.')[0]}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      if (registration.fallas.isNotEmpty)
+                                        Text(
+                                          'Fallas: ${registration.fallas.length}',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.textSecondary,
                                           ),
-                                        );
-                                      }).toList(),
+                                        ),
+                                      if (registration.fotoPaths.isNotEmpty)
+                                        SizedBox(
+                                          height: 100,
+                                          child: ListView.builder(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount:
+                                                registration.fotoPaths.length,
+                                            itemBuilder: (context, fotoIndex) {
+                                              final file = File(
+                                                  registration
+                                                      .fotoPaths[fotoIndex]);
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 8),
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  child: Image.file(
+                                                    file,
+                                                    width: 80,
+                                                    height: 80,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (context,
+                                                        error, stackTrace) =>
+                                                        const Icon(
+                                                          Icons.broken_image,
+                                                          size: 80,
+                                                          color: Colors.grey,
+                                                        ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            if (registration.firmaPath != null &&
-                                File(registration.firmaPath!).existsSync()) ...[
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.draw,
-                                    color: AppColors.cfeGreen,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Firma registrada',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                              );
+                            },
+                          ),
               ),
-          if (_isLoading)
+            ],
+          ),
+          if (_isLoading && _pendingRegistrations.isNotEmpty)
             Container(
               color: Colors.black26,
               child: const Center(

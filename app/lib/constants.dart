@@ -44,17 +44,17 @@ class AppStrings {
       'Por favor, activa los servicios de ubicación';
   static const String helpTitle = 'Ayuda';
   static const List<String> registerTabletSteps = [
-    '1. Presiona el botón "Administrar Tabletas".',
-    '2. Completa todos los campos obligatorios.',
-    '3. Toma las 4 fotos de evidencia requeridas.',
-    '4. Presiona "Registrar" para guardar los datos.',
+    'En la pantalla principal, selecciona "Registrar Tabletas" en Acciones Rápidas.',
+    'Ingresa los datos requeridos, como el número de activo, número de serie y RPE del trabajador.',
+    'Captura las 4 fotos de evidencia: tableta, chip, número de serie visible y firma del trabajador.',
+    'Revisa los datos y presiona "Registrar Tableta" para guardar. Verás una confirmación si todo es correcto.',
   ];
   static const String registerTabletTitle = '¿Cómo registrar una tableta?';
   static const String historyTitle = '¿Cómo consultar el historial?';
   static const List<String> historySteps = [
-    '1. Presiona el botón "Historial" en Acciones Rápidas.',
-    '2. Verás la lista de tabletas registradas.',
-    '3. Usa el botón de actualizar si no ves registros recientes.',
+    'Presiona el botón "Historial" en Acciones Rápidas.',
+    'Verás la lista de tabletas registradas.',
+    'Usa el botón de actualizar si no ves registros recientes.',
   ];
   static const String supportTitle = 'Soporte técnico';
   static const List<String> supportSteps = [
@@ -140,6 +140,9 @@ class AppStrings {
       'Por favor, dibuje una firma antes de confirmar';
   static const String signatureNotConfirmedError =
       'Por favor, confirme la firma antes de registrar';
+
+  static const String centroCostoLabel = 'Centro de Costo'; // Nueva constante
+
   // Nuevas constantes para la sección de ubicación
   static const String locationSection = 'Ubicación Actual';
   static const String noLocationAvailable = 'No se pudo obtener la ubicación';
@@ -178,6 +181,44 @@ class AppStrings {
     'MEDICION',
     'ADMINISTRACION',
     'TICS',
+  ];
+  static const List<String> centroCostoOptions = [
+    // Nueva lista de opciones
+    'D2910 - D096 Distrib Renac',
+    'D2911 - D096 Dist El Treinta',
+    'D2912 - D096 Dist San Marcos',
+    'D2913 - D096 Distr San Luis',
+    'D2914 - D096 Distri Ometepe',
+    'D2915 - D096 Comer Renacimi',
+    'D2916 - D096 Comer El Treint',
+    'D2917 - D096 Com San Marc',
+    'D2918 - D096 Com San Luis',
+    'D2919 - D096 Serv Com Omete',
+    'D2920 - D096 Cont y Con Rena',
+    'D2921 - D096 Cont Con El Tre',
+    'D2922 - D096 Cont Con San Ma',
+    'D2923 - D096 Cont Con San Lu',
+    'D2924 - D096 Cont y Con Omet',
+    'D2890 - D096 Dirección',
+    'D2891 - D096 Planeación',
+    'D2892 - D096 Solicitudes y',
+    'D2893 - D096 Proyectos y C',
+    'D2894 - D096 Operación de',
+    'D2895 - D096 Redes aéreas',
+    'D2896 - D096 Redes subterr',
+    'D2897 - D096 Subestaciones',
+    'D2898 - D096 Protecc y Cal',
+    'D2899 - D096 Comun y Contr',
+    'D2900 - D096 Cont y conexi',
+    'D2901 - D096 Aseg de la me',
+    'D2902 - D096 Taller de med',
+    'D2903 - D096 Integ de cons',
+    'D2904 - D096 Comercial cam',
+    'D2905 - D096 Finazas',
+    'D2906 - D096 Administració',
+    'D2907 - D096 Recursos Huma',
+    'D2908 - D096 Tec de la inf',
+    'D2909 - D096 Juridico',
   ];
 }
 

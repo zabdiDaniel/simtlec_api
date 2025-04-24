@@ -12,7 +12,7 @@ import '../constants.dart';
 import '../models/tablet_registration.dart';
 import '../services/sync_service.dart';
 import 'tablet_registration_content.dart';
-import 'dart:async';
+import 'pending_registrations_screen.dart';
 
 class TabletRegistrationScreen extends StatefulWidget {
   final Map<String, dynamic>? userData;
@@ -39,6 +39,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
   String? _selectedAnio;
   String? _selectedAgencia;
   String? _selectedProceso;
+  String? _selectedCentroCosto;
   Map<String, dynamic>? _trabajadorAsignado;
   bool _isLoading = false;
   bool _isSignatureConfirmed = false;
@@ -72,31 +73,33 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
     },
   };
   LatLng? _currentLocation;
-  bool _isLocationLoading = true;
+  bool _isLocationLoading = false;
   final ImagePicker _picker = ImagePicker();
   final SyncService _syncService = SyncService();
-  Timer? _syncTimer;
+  final ValueNotifier<int> _pendingCountNotifier = ValueNotifier<int>(0);
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
-    _syncService.syncPendingRegistrations(context);
-    _syncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      _syncService.syncPendingRegistrations(context);
-    });
+    _updatePendingCount();
   }
 
   @override
   void dispose() {
-    _syncTimer?.cancel();
     _activoController.dispose();
     _inventarioController.dispose();
     _serieController.dispose();
     _trabajadorController.dispose();
     _chipSerieController.dispose();
     _signatureController.dispose();
+    _pendingCountNotifier.dispose();
     super.dispose();
+  }
+
+  Future<void> _updatePendingCount() async {
+    final count = await _syncService.getPendingCount();
+    _pendingCountNotifier.value = count;
   }
 
   Future<void> _getCurrentLocation() async {
@@ -163,10 +166,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
   }
 
   void _retryLocation() {
-    setState(() => _isLoading = true);
-    _getCurrentLocation().then((_) {
-      if (mounted) setState(() => _isLoading = false);
-    });
+    _getCurrentLocation();
   }
 
   Future<void> _tomarFoto(int index) async {
@@ -180,7 +180,6 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         preferredCameraDevice: CameraDevice.rear,
       );
       if (image != null && mounted) {
-        // Guardar foto en directorio persistente
         final directory = await getApplicationDocumentsDirectory();
         final photoPath =
             '${directory.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -246,7 +245,6 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // Preparar datos
       List<String> fotoPaths = _fotos
           .where((foto) => foto != null)
           .map((foto) => foto!.path)
@@ -268,6 +266,9 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         });
       });
 
+      // Añadir log para depurar el valor de _selectedCentroCosto
+      print('Valor de _selectedCentroCosto antes de registrar: $_selectedCentroCosto');
+
       final registration = TabletRegistration(
         activo: _activoController.text,
         inventario: _inventarioController.text,
@@ -276,6 +277,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         anioAdquisicion: _selectedAnio,
         agencia: _selectedAgencia,
         proceso: _selectedProceso,
+        centroCosto: _selectedCentroCosto,
         rpeTrabajador: _trabajadorAsignado?['rpe'],
         marcaChip: AppStrings.fixedChipBrand,
         numeroSerieChip: _chipSerieController.text.isEmpty
@@ -291,32 +293,75 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
         timestamp: DateTime.now(),
       );
 
-      // Guardar localmente
-      await _syncService.saveRegistrationLocally(registration);
-      _showSnackBar('Registro guardado localmente');
-
-      // Intentar sincronizar
-      await _syncService.syncPendingRegistrations(context);
-
-      // Verificar si se sincronizó
-      final pendingCount = await _syncService.getPendingCount();
-      if (pendingCount == 0) {
+      final success = await _syncService.trySendRegistration(registration);
+      if (success) {
         _showSnackBar(AppStrings.registrationSuccess);
         _resetForm();
       } else {
+        await _syncService.saveRegistrationLocally(registration);
         _showSnackBar(
-          'Registro guardado, pero pendiente de sincronización debido a la red',
+          'Registro no enviado debido a problemas de conexión. Guardado localmente.',
           isError: true,
         );
+        _resetForm();
       }
+      await _updatePendingCount();
     } catch (e) {
+      List<String> fotoPaths = _fotos
+          .where((foto) => foto != null)
+          .map((foto) => foto!.path)
+          .toList();
+      String? firmaPath;
+      if (_trabajadorAsignado != null) {
+        final signatureFile = await _saveSignature();
+        if (signatureFile != null) {
+          firmaPath = signatureFile.path;
+        }
+      }
+
+      List<Map<String, String>> fallas = [];
+      _fallasPorCategoria.forEach((categoria, fallasMap) {
+        fallasMap.forEach((falla, seleccionada) {
+          if (seleccionada) {
+            fallas.add({'categoria': categoria, 'falla': falla});
+          }
+        });
+      });
+
+      // Añadir log para depurar el valor de _selectedCentroCosto en el catch
+      print('Valor de _selectedCentroCosto en catch: $_selectedCentroCosto');
+
+      final registration = TabletRegistration(
+        activo: _activoController.text,
+        inventario: _inventarioController.text,
+        numeroSerie: _serieController.text,
+        versionAndroid: _selectedAndroid,
+        anioAdquisicion: _selectedAnio,
+        agencia: _selectedAgencia,
+        proceso: _selectedProceso,
+        centroCosto: _selectedCentroCosto,
+        rpeTrabajador: _trabajadorAsignado?['rpe'],
+        marcaChip: AppStrings.fixedChipBrand,
+        numeroSerieChip: _chipSerieController.text.isEmpty
+            ? null
+            : _chipSerieController.text,
+        ubicacionRegistro: _currentLocation != null
+            ? '${_currentLocation!.latitude},${_currentLocation!.longitude}'
+            : null,
+        fotoPaths: fotoPaths,
+        firmaPath: firmaPath,
+        fallas: fallas,
+        asignadaPor: widget.userData?['rpe'] ?? 'UNKNOWN',
+        timestamp: DateTime.now(),
+      );
+
+      await _syncService.saveRegistrationLocally(registration);
       _showSnackBar(
-        AppStrings.registrationError.replaceFirst(
-          '%s',
-          e.toString().replaceAll('Exception: ', ''),
-        ),
+        'Error al enviar registro: ${e.toString().replaceAll('Exception: ', '')}. Guardado localmente.',
         isError: true,
       );
+      _resetForm();
+      await _updatePendingCount();
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -333,6 +378,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
       _selectedAnio = null;
       _selectedAgencia = null;
       _selectedProceso = null;
+      _selectedCentroCosto = null;
       _trabajadorAsignado = null;
       _trabajadorController.clear();
       _fotos.fillRange(0, 4, null);
@@ -340,8 +386,9 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
       _signatureController.clear();
       _isSignatureConfirmed = false;
       _currentLocation = null;
-      _isLocationLoading = true;
+      _isLocationLoading = false;
     });
+    _getCurrentLocation();
   }
 
   Future<void> _buscarTrabajador() async {
@@ -403,27 +450,71 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          FutureBuilder<int>(
-            future: _syncService.getPendingCount(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data! > 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Chip(
-                    label: Text(
-                      '${snapshot.data} pendiente${snapshot.data! > 1 ? 's' : ''}',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    backgroundColor: AppColors.errorColor,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+          ValueListenableBuilder<int>(
+            valueListenable: _pendingCountNotifier,
+            builder: (context, count, child) {
+              if (count > 0) {
+                return GestureDetector(
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PendingRegistrationsScreen(),
+                      ),
+                    );
+                    await _updatePendingCount();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.cfeGreen,
+                            AppColors.cfeDarkGreen,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.cfeGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.hourglass_top,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$count Pendiente${count > 1 ? 's' : ''}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
               }
               return const SizedBox.shrink();
-        },
+            },
           ),
         ],
       ),
@@ -440,6 +531,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
             selectedAnio: _selectedAnio,
             selectedAgencia: _selectedAgencia,
             selectedProceso: _selectedProceso,
+            selectedCentroCosto: _selectedCentroCosto,
             trabajadorAsignado: _trabajadorAsignado,
             fotos: _fotos,
             selectedCategoriaFalla: _selectedCategoriaFalla,
@@ -450,6 +542,7 @@ class _TabletRegistrationScreenState extends State<TabletRegistrationScreen> {
             onAnioChanged: (val) => setState(() => _selectedAnio = val),
             onAgenciaChanged: (val) => setState(() => _selectedAgencia = val),
             onProcesoChanged: (val) => setState(() => _selectedProceso = val),
+            onCentroCostoChanged: (val) => setState(() => _selectedCentroCosto = val),
             onTakePhoto: _tomarFoto,
             onSearchWorker: _buscarTrabajador,
             onCategoriaFallaChanged: (val) =>

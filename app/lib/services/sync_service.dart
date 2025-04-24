@@ -8,6 +8,18 @@ import '../api/tabletas_api.dart';
 import '../models/tablet_registration.dart';
 import '../constants.dart';
 
+class SyncResult {
+  final bool success;
+  final String? error;
+  final TabletRegistration registration;
+
+  SyncResult({
+    required this.success,
+    this.error,
+    required this.registration,
+  });
+}
+
 class SyncService {
   Future<void> saveRegistrationLocally(TabletRegistration registration) async {
     final prefs = await SharedPreferences.getInstance();
@@ -21,18 +33,37 @@ class SyncService {
     return (prefs.getStringList('pendingRegistrations') ?? []).length;
   }
 
-  Future<void> syncPendingRegistrations(BuildContext context) async {
+  Future<List<TabletRegistration>> getPendingRegistrations() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pending = prefs.getStringList('pendingRegistrations') ?? [];
+    return pending
+        .map((json) => TabletRegistration.fromJson(jsonDecode(json)))
+        .toList();
+  }
+
+  Future<List<SyncResult>> syncPendingRegistrations(BuildContext context) async {
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult == ConnectivityResult.none) {
-      debugPrint('Sin conexión, esperando...');
-      return;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sin conexión a internet'),
+            backgroundColor: AppColors.errorColor,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.all(16),
+          ),
+        );
+      }
+      return [];
     }
 
     final prefs = await SharedPreferences.getInstance();
     List<String> pending = prefs.getStringList('pendingRegistrations') ?? [];
-    if (pending.isEmpty) return;
+    if (pending.isEmpty) return [];
 
     List<String> stillPending = [];
+    List<SyncResult> results = [];
+
     for (String json in pending) {
       final registration = TabletRegistration.fromJson(jsonDecode(json));
       try {
@@ -53,25 +84,57 @@ class SyncService {
               debugPrint('Error al eliminar firma: $e');
             }
           }
+          results.add(SyncResult(
+            success: true,
+            registration: registration,
+          ));
         } else {
           stillPending.add(json);
+          results.add(SyncResult(
+            success: false,
+            error: 'Error desconocido al enviar registro',
+            registration: registration,
+          ));
         }
       } catch (e) {
-        debugPrint('Error sincronizando registro: $e');
         stillPending.add(json);
+        results.add(SyncResult(
+          success: false,
+          error: e.toString().replaceAll('Exception: ', ''),
+          registration: registration,
+        ));
       }
     }
 
     await prefs.setStringList('pendingRegistrations', stillPending);
-    if (stillPending.length < pending.length && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registros sincronizados exitosamente'),
-          backgroundColor: AppColors.cfeGreen,
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.all(16),
-        ),
-      );
+    return results;
+  }
+
+  Future<bool> trySendRegistration(TabletRegistration registration) async {
+    try {
+      final success = await _sendRegistration(registration);
+      if (success) {
+        // Limpiar archivos locales
+        for (String path in registration.fotoPaths) {
+          try {
+            await File(path).delete();
+          } catch (e) {
+            debugPrint('Error al eliminar foto $path: $e');
+          }
+        }
+        if (registration.firmaPath != null) {
+          try {
+            await File(registration.firmaPath!).delete();
+          } catch (e) {
+            debugPrint('Error al eliminar firma: $e');
+          }
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error enviando registro: $e');
+      return false;
     }
   }
 
@@ -85,6 +148,7 @@ class SyncService {
       'anio_adquisicion': registration.anioAdquisicion,
       'agencia': registration.agencia,
       'proceso': registration.proceso,
+      'centro_costo': registration.centroCosto, // Nuevo campo
       'rpe_trabajador': registration.rpeTrabajador,
       'marca_chip': registration.marcaChip,
       'numero_serie_chip': registration.numeroSerieChip,
